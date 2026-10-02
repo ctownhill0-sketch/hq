@@ -1,0 +1,104 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "./tokens.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Map tokens into Tailwind (one token set; see tokens.css). */
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success-soft: var(--success-soft);
+  --color-warning-soft: var(--warning-soft);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-info-soft: var(--info-soft);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-text: var(--accent-text);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --ease-out: var(--ease-out);
+  --animate-skeleton: skeleton 2s -1s infinite linear;
+  @keyframes skeleton {
+    to { background-position: -200% 0; }
+  }
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply relative bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  h1, h2, h3 { text-wrap: balance; }
+  p { text-wrap: pretty; }
+  code, kbd, samp, pre { font-family: var(--font-mono); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+}
+
+@layer utilities {
+  /* Press feedback for buttons (motion policy: ~0.97, transform only). */
+  .press { transition: scale var(--duration-fast) var(--ease-out); }
+  .press:active:not(:disabled) { scale: var(--press-scale); }
+
+  /* Comfortable touch targets on coarse pointers; dense on desktop. */
+  @media (pointer: coarse) {
+    .touch-target { min-height: 44px; min-width: 44px; }
+  }
+}
+
+/* Theme switch must not animate: suppress transitions for one frame. */
+.theme-switching, .theme-switching *, .theme-switching *::before, .theme-switching *::after {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-property: opacity !important;
+  }
+}
+
+/* Base UI normally injects this as a <style> tag; the CSP forbids that, so it
+   lives here instead (see CSPProvider in App.tsx). */
+.base-ui-disable-scrollbar { scrollbar-width: none; }
+.base-ui-disable-scrollbar::-webkit-scrollbar { display: none; }

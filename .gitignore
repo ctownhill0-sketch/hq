@@ -9,3 +9,9 @@ data/*.sqlite
 backups/
 *.log
 .DS_Store
+
+# Local-only UI screenshots from npm run test:e2e
+docs/screens/
+# Frontend build output and deps
+web/dist/
+web/node_modules/

@@ -3,7 +3,8 @@
 // in-memory database and a fake Google endpoint.
 const path = require('path');
 const express = require('express');
-const { hostCheck, csrfCheck, securityHeaders } = require('./security');
+const fs = require('fs');
+const { hostCheck, csrfCheck, securityHeaders, createCsrfToken } = require('./security');
 const { createPlacesClient } = require('./google/places');
 const { createRateLimiter } = require('./google/rateLimit');
 const { createDetailsCache } = require('./google/cache');
@@ -36,11 +37,20 @@ function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.
   app.disable('x-powered-by');
   app.use(hostCheck(config.port));
   app.use(securityHeaders);
-  app.use(express.static(path.join(__dirname, '..', 'public'), { index: 'index.html' }));
+  // The compiled React app (web/dist, built by `npm run build`).
+  const webDist = config.webDist || path.join(__dirname, '..', 'web', 'dist');
+  app.use(express.static(webDist, { index: 'index.html', maxAge: 0 }));
+  app.get('/', (req, res) => {
+    if (fs.existsSync(path.join(webDist, 'index.html'))) return res.sendFile(path.join(webDist, 'index.html'));
+    res.status(503).type('text/plain').send('HQ Desk UI is not built yet. Run: npm run build   (then restart npm start)');
+  });
 
+  const csrfToken = createCsrfToken();
   const api = express.Router();
   api.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
-  api.use(csrfCheck(config.port));
+  // Same-origin pages fetch the CSRF token here and send it as X-CSRF-Token.
+  api.get('/session', (req, res) => res.json({ csrfToken }));
+  api.use(csrfCheck(config.port, csrfToken));
   api.use(express.json({ limit: '200kb' }));
   api.use(require('./routes/places')({ places, rateLimiter }));
   api.use(require('./routes/agencies')({ db }));

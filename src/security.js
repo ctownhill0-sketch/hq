@@ -1,10 +1,12 @@
 'use strict';
+const crypto = require('crypto');
 // Local-only hardening.
 // - Host check: only accept requests addressed to 127.0.0.1/localhost on our
 //   port. Blocks DNS-rebinding attacks from websites you visit.
-// - CSRF: every state-changing request must carry the custom X-HQ-Desk header
-//   (browsers cannot send it cross-site without a CORS preflight, which we
-//   never approve) and, if present, an Origin matching this server.
+// - CSRF: every state-changing request must carry X-CSRF-Token with the random
+//   per-process token from GET /api/session. Only same-origin pages can read
+//   that token (no CORS is ever approved, and the Host check blocks DNS
+//   rebinding). A cross-origin Origin header is refused outright.
 // - Strict security headers: no external scripts, no framing.
 
 function allowedHosts(port) {
@@ -21,15 +23,27 @@ function hostCheck(port) {
   };
 }
 
-function csrfCheck(port) {
+function createCsrfToken() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+
+function tokensEqual(a, b) {
+  const x = Buffer.from(String(a || ''));
+  const y = Buffer.from(String(b || ''));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
+function csrfCheck(port, token) {
   const origins = new Set([...allowedHosts(port)].map((h) => `http://${h}`));
   return (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     const origin = req.headers.origin;
     if (origin && !origins.has(origin)) return res.status(403).json({ error: 'Cross-origin request blocked.' });
-    if (req.headers['x-hq-desk'] !== '1') return res.status(403).json({ error: 'Missing X-HQ-Desk header (CSRF protection).' });
     if (req.method !== 'DELETE' && !req.is('application/json')) {
       return res.status(415).json({ error: 'Content-Type must be application/json.' });
+    }
+    if (!tokensEqual(req.headers['x-csrf-token'], token)) {
+      return res.status(403).json({ error: 'Missing or invalid CSRF token. Reload the page.', code: 'CSRF' });
     }
     next();
   };
@@ -41,6 +55,7 @@ function securityHeaders(req, res, next) {
     "script-src 'self'",
     "style-src 'self'",
     "img-src 'self' data:",
+    "font-src 'self'",
     "connect-src 'self'",
     "object-src 'none'",
     "base-uri 'none'",
@@ -55,4 +70,4 @@ function securityHeaders(req, res, next) {
   next();
 }
 
-module.exports = { hostCheck, csrfCheck, securityHeaders };
+module.exports = { hostCheck, csrfCheck, securityHeaders, createCsrfToken };

@@ -1,7 +1,7 @@
 'use strict';
 // "Today" dashboard data and the per-agency activity timeline.
 const express = require('express');
-const { parseId } = require('../validate');
+const { parseId, ValidationError } = require('../validate');
 
 module.exports = function dashboardRoutes({ db }) {
   const r = express.Router();
@@ -30,6 +30,22 @@ module.exports = function dashboardRoutes({ db }) {
         open_tasks: db.prepare("SELECT COUNT(*) n FROM tasks WHERE status = 'open'").get().n,
       },
     });
+  });
+
+  // Month view for the Follow-ups calendar: your demos and dated tasks.
+  r.get('/calendar', (req, res, next) => {
+    try {
+      const month = String(req.query.month || '');
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new ValidationError(['month: must be YYYY-MM']);
+      const from = `${month}-01`;
+      const to = `${month}-31`;
+      res.json({
+        demos: db.prepare(`SELECT d.id, d.agency_id, d.scheduled_at, d.notes, d.outcome, ${nameSql} FROM demos d JOIN agencies a ON a.id = d.agency_id
+          WHERE substr(d.scheduled_at, 1, 10) BETWEEN ? AND ? ORDER BY d.scheduled_at`).all(from, to),
+        tasks: db.prepare(`SELECT t.id, t.agency_id, t.title, t.due_date, t.status, ${nameSql} FROM tasks t LEFT JOIN agencies a ON a.id = t.agency_id
+          WHERE t.due_date BETWEEN ? AND ? ORDER BY t.due_date, t.id`).all(from, to),
+      });
+    } catch (e) { next(e); }
   });
 
   r.get('/agencies/:id/timeline', (req, res, next) => {

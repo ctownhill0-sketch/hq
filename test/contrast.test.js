@@ -1,22 +1,23 @@
 'use strict';
-// WCAG AA contrast check for the design tokens in public/css/tokens.css,
-// in both light and dark themes. 4.5:1 for text, 3:1 for UI borders/focus.
+// WCAG AA contrast check for the design tokens in web/src/styles/tokens.css,
+// in light and dark themes. 4.5:1 for text, 3:1 for focus ring / accent UI.
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'css', 'tokens.css'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '..', 'web', 'src', 'styles', 'tokens.css'), 'utf8');
 
 function block(selectorRe) {
   const start = css.search(selectorRe);
+  if (start < 0) throw new Error(`block not found: ${selectorRe}`);
   const open = css.indexOf('{', start);
   let depth = 0;
   for (let i = open; i < css.length; i++) {
     if (css[i] === '{') depth++;
     if (css[i] === '}' && --depth === 0) return css.slice(open + 1, i);
   }
-  throw new Error('block not found');
+  throw new Error('unterminated block');
 }
 function vars(text) {
   const out = {};
@@ -34,33 +35,37 @@ function ratio(a, b) {
 }
 
 const light = vars(block(/:root\s*\{/));
-const dark = { ...light, ...vars(block(/:root\[data-theme="dark"\]\s*\{/)) };
-const darkSystem = { ...light, ...vars(block(/:root:not\(\[data-theme="light"\]\)\s*\{/)) };
+const dark = { ...light, ...vars(block(/\.dark\s*\{/)) };
 
+const STAGES = ['researched', 'contacted', 'conversation', 'demo', 'proposal', 'paid_pilot', 'declined'];
 const TEXT_PAIRS = [
-  ['text', 'bg'], ['text', 'surface'], ['text-muted', 'surface'], ['text-muted', 'bg'], ['text-subtle', 'surface'],
-  ['text-on-accent', 'accent'], ['accent-text', 'surface'], ['accent-text', 'accent-soft'], ['text', 'sidebar-bg'],
-  ['text-muted', 'sidebar-bg'], ['success', 'success-soft'], ['warning', 'warning-soft'], ['danger', 'danger-soft'],
-  ['info', 'info-soft'], ['danger', 'surface'],
-  ...['researched', 'contacted', 'conversation', 'demo', 'proposal', 'paid_pilot', 'declined'].map((s) => [`stage-${s}`, `stage-${s}-bg`]),
+  ['foreground', 'background'], ['foreground', 'card'], ['foreground', 'popover'],
+  ['muted-foreground', 'card'], ['muted-foreground', 'background'], ['muted-foreground', 'popover'],
+  ['primary-foreground', 'primary'], ['accent-text', 'card'], ['accent-text', 'accent-soft'],
+  ['sidebar-foreground', 'sidebar'], ['sidebar-primary-foreground', 'sidebar-primary'],
+  ['success-foreground', 'success-soft'], ['warning-foreground', 'warning-soft'],
+  ['destructive-foreground', 'destructive-soft'], ['info-foreground', 'info-soft'],
+  ['destructive-foreground', 'card'], ['success-foreground', 'card'], ['warning-foreground', 'card'],
+  ...STAGES.map((s) => [`stage-${s}`, `stage-${s}-bg`]),
 ];
 
-for (const [name, theme] of [['light', light], ['dark', dark], ['dark (system)', darkSystem]]) {
+for (const [name, theme] of [['light', light], ['dark', dark]]) {
   test(`WCAG AA text contrast: ${name} theme`, () => {
     for (const [fg, bg] of TEXT_PAIRS) {
+      assert.ok(theme[fg] && theme[bg], `${name}: missing --${fg} or --${bg}`);
       const r = ratio(theme[fg], theme[bg]);
       assert.ok(r >= 4.5, `${name}: --${fg} on --${bg} is ${r.toFixed(2)}:1 (needs 4.5)`);
     }
   });
-  test(`WCAG AA UI contrast (focus ring / accent): ${name} theme`, () => {
-    for (const [fg, bg] of [['accent', 'bg'], ['accent', 'surface'], ['border-strong', 'surface']]) {
+  test(`WCAG AA non-text contrast (focus ring, accent): ${name} theme`, () => {
+    for (const [fg, bg] of [['ring', 'background'], ['ring', 'card'], ['primary', 'card'], ['primary', 'background']]) {
       const r = ratio(theme[fg], theme[bg]);
-      const need = fg === 'border-strong' ? 1.5 : 3; // decorative borders are not required to meet 3:1
-      assert.ok(r >= need, `${name}: --${fg} on --${bg} is ${r.toFixed(2)}:1 (needs ${need})`);
+      assert.ok(r >= 3, `${name}: --${fg} on --${bg} is ${r.toFixed(2)}:1 (needs 3)`);
     }
   });
 }
 
-test('dark theme blocks are identical (explicit and system)', () => {
-  assert.deepStrictEqual(vars(block(/:root\[data-theme="dark"\]\s*\{/)), vars(block(/:root:not\(\[data-theme="light"\]\)\s*\{/)));
+test('every light token has a dark counterpart', () => {
+  const missing = Object.keys(vars(block(/:root\s*\{/))).filter((k) => !(k in vars(block(/\.dark\s*\{/))));
+  assert.deepStrictEqual(missing, []);
 });

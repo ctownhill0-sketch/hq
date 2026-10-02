@@ -51,8 +51,10 @@ async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl, appO
   holder.app = createApp({ db, config, fetchImpl, ...appOptions });
   const baseUrl = `http://127.0.0.1:${config.port}`;
 
+  // Same flow as the browser app: read the CSRF token once, send it on writes.
+  const session = await (await fetch(`${baseUrl}/api/session`)).json();
   async function request(method, path, body, headers = {}) {
-    const init = { method, headers: { 'X-HQ-Desk': '1', ...headers } };
+    const init = { method, headers: { 'X-CSRF-Token': session.csrfToken, ...headers } };
     if (body !== undefined) {
       init.headers['Content-Type'] = 'application/json';
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
@@ -63,7 +65,7 @@ async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl, appO
     return { status: res.status, body: json };
   }
 
-  return { db, config, base: baseUrl, request, app: holder.app, close: () => new Promise((r) => server.close(r)) };
+  return { db, config, base: baseUrl, csrfToken: session.csrfToken, request, app: holder.app, close: () => new Promise((r) => server.close(r)) };
 }
 
 module.exports = { startApp, fakeGoogle, FAKE_PLACE };

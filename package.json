@@ -1,13 +1,19 @@
 {
   "name": "hq-desk",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "HQ Desk: private, local-only sales and planning workspace",
   "main": "server.js",
   "scripts": {
+    "setup": "npm install && npm --prefix web ci",
+    "build": "npm --prefix web run build",
     "start": "node server.js",
+    "dev": "node scripts/dev.js",
     "db:init": "node scripts/init-db.js",
     "db:reset": "node scripts/reset-db.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:web": "npm --prefix web test",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test:all": "npm test && npm run test:web && npm run build && npm run test:e2e"
   },
   "repository": {
     "type": "git",

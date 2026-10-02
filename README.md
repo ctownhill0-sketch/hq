@@ -4,20 +4,24 @@ A private, local-only sales and planning workspace for HQ. It runs on your lapto
 
 **Built so far:**
 - **Stage 1:** agency search (Google Places), saved agencies, agency page with live Google details, qualification, call log with the six discovery questions, tasks, demos, follow-ups, call script, manual "add by hand" agencies, fake sample agencies.
-- **Stage 1.5:** per-agency **Deep Research** (AI fit assessment from the agency's own website, with sources) and a full UI overhaul: Today dashboard, light/dark themes, command palette, keyboard shortcuts, quick-log drawer, autosave, undo.
+- **Stage 1.5a (current):** the UI rebuilt in React + TypeScript + Tailwind (coss ui components, ReUI Kanban and Timeline): Today dashboard, agencies grid, agency page with tabs and timeline, Pipeline board, Follow-ups calendar, command palette, keyboard shortcuts, quick-log drawer, autosave, undo, light/dark themes.
+- **Stage 1.5b (next):** the Deep Research screen. Its server side (crawler, AI analysis, caps) is already built and tested; the Research tab shows "coming in the next step" until the screen is added.
 
 ---
 
 ## Setup
 
-You need **Node.js 18.17 or newer** (`node -v`). Download it from nodejs.org if you don't have it.
+You need **Node.js 20.19+ or 22.12+** (`node -v`); the UI build tool (Vite 8) requires it. Download it from nodejs.org if you don't have it.
 
 ```bash
 cd hq
-npm install
+npm run setup               # installs the server packages, then the UI packages (scripts disabled)
 cp .env.example .env        # Windows: copy .env.example .env
 npm run db:init             # creates data/hq-desk.db and adds 3 FAKE sample agencies
+npm run build               # compiles the UI into web/dist (re-run after pulling changes)
 ```
+
+`npm run setup` is `npm install` (server) followed by `npm --prefix web ci` (UI, exact versions from `web/package-lock.json`). The UI folder has an `.npmrc` with `ignore-scripts=true`, so no UI package can run an install script. The server's `better-sqlite3` does need its install step (it fetches a prebuilt SQLite binary), so the root install keeps scripts on.
 
 The app works without a Google key. Search stays off and explains how to turn it on. To enable it, follow **Google Cloud setup** below, then open `.env` in a text editor and paste the key after `GOOGLE_PLACES_API_KEY=`. Never paste the key into chat, the browser, or a commit.
 
@@ -29,15 +33,29 @@ npm start
 
 Open **http://127.0.0.1:4317** (or the `PORT` you set). Stop it with `Ctrl+C`.
 
-The server binds to `127.0.0.1` only, so other devices on your Wi-Fi cannot reach it.
+The server binds to `127.0.0.1` only, so other devices on your Wi-Fi cannot reach it. It serves the compiled UI from `web/dist`; if you see "UI is not built yet", run `npm run build`.
+
+### Development (live reload)
+
+```bash
+npm run dev
+```
+
+This starts the API (Express on 127.0.0.1:4317, restarts on server changes) and the Vite dev server on **http://127.0.0.1:5173** (UI hot reload), which forwards `/api` to Express. Both bind to 127.0.0.1 only. Use 5173 while developing and 4317 for normal use.
 
 ## Test
 
 ```bash
-npm test
+npm test            # server: API, Google rules, security, research, contrast (node:test)
+npm run test:web    # UI unit tests (Vitest + Testing Library)
+npm run build && npm run test:e2e   # browser: axe accessibility scan, keyboard walkthrough, screenshots
 ```
 
-The tests use an in-memory database, a fake Google endpoint, a fake agency website and a fake AI API. They never touch the network or your real data. They cover:
+`test:e2e` drives the compiled app in Chromium against a throwaway in-memory server with a **fake Google backend** (no real Google calls). It needs Chrome or Chromium on your machine; set `CHROMIUM_PATH` if it isn't found automatically. Light and dark screenshots of each page are written to `docs/screens/` (git-ignored, local only).
+
+UI unit tests check: the CSRF token header is sent on every write (and refreshed once if the server restarted); no UI path sends Google-derived fields to the server (Save and Relink send only the place ID; edits next to the live Google card send only your typed fields); optimistic updates roll back when a request fails; moving to Declined requires a reason (cancelling sends nothing).
+
+The server tests use an in-memory database, a fake Google endpoint, a fake agency website and a fake AI API. They never touch the network or your real data. They cover:
 - research SSRF protections: http, localhost, IP literals, private/link-local/IPv6-mapped addresses, redirects to private IPs or other domains, too many redirects
 - robots.txt parsing and obedience; robots.txt errors stop the run
 - strict schema validation: off-schema, extra or injected fields reject the whole result; invented quotes are dropped
@@ -55,13 +73,16 @@ The tests use an in-memory database, a fake Google endpoint, a fake agency websi
 
 ## Using the app
 
-- **Today** (`g` `t`): overdue and due follow-ups, demos, pipeline snapshot, agencies that still need research, daily limits.
-- **Agencies** (`g` `a`): instant search (`/`), filters (stage, apartments, fit score, follow-up), click column headers to sort, `j`/`k` or arrows to move, `Enter` to open.
-- **Agency page:** stage selector (changing it shows an Undo toast; "Declined" asks for a reason), quick actions (Call, Email, Task), tabs (Overview, Research, Calls, Tasks, Notes) and an activity timeline. Fields **save automatically** as you type, with a "Saved" indicator.
+- **Today** (`g` `t`): overdue, today's and next-7-days follow-ups, upcoming demos, pipeline snapshot, agencies that still need research, Google usage.
+- **Agencies** (`g` `a`): a grid with instant search (`/`), filters (stage, apartments yes/no/unknown, next follow-up), sortable columns, `↑`/`↓` (or `j`/`k`) to move, `Enter` to open, right-click (or the context-menu key) for Open / Log a call / Move to… / Delete.
+- **Agency page:** stage selector (changing it shows an Undo toast; "Declined" asks for a reason), quick actions (Call, Email, Task, More), tabs (Overview, Research, Calls, Tasks, Notes) and an activity timeline. Fields **save automatically** as you type, with a "Saved" indicator.
+- **Pipeline** (`g` `p`): Kanban board. Drag cards between stages, or use the keyboard: focus a card's grip handle, `Space` to pick up, arrow keys to move, `Space` to drop (`Esc` cancels). Every card also has a **Move to…** menu.
+- **Follow-ups** (`g` `u`): the task list plus a month calendar of demos and dated tasks (arrow keys move between days, `PageUp`/`PageDown` change month).
 - **Command palette:** `Cmd/Ctrl+K` to jump to any agency or run "Log a call", "Add task", "New agency", "Search Google".
 - **Quick-log a call** from anywhere with `l`. Save with `Cmd/Ctrl+Enter`. A "next action" becomes a task.
 - **Shortcuts:** press `?` for the full list. `[` collapses the sidebar. The theme button (bottom of the sidebar) cycles system / light / dark.
 - **Deletes** (calls, tasks, demos, agencies) wait 5 seconds with an **Undo** button before anything is removed.
+- **Motion:** frequent and keyboard actions (palette, quick log, tabs, sorting, theme) are instant; other transitions are short (≤200ms) and respect your system's "reduce motion" setting. Details in `DESIGN_SYSTEM_CHECKLIST.md`.
 
 ## Deep Research (per agency, on demand)
 
@@ -112,6 +133,42 @@ Without them, the Research tab explains what's missing and everything else works
 - Prices are in `src/research/cost.js`. Check them against Anthropic's pricing page, or override them with `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK`.
 - Also set a spend limit on your Anthropic account (Console → Billing → Limits). The app's caps protect you within the app; the account limit protects the key.
 - `LLM_REFUSAL_FALLBACK=true` turns on Anthropic's server-side fallback: if the model declines, a fallback model may answer instead, and that's billed at the fallback model's price.
+
+## Dependencies
+
+Exact versions are pinned and both lockfiles are committed. No analytics or telemetry packages are included. `npm audit` (both folders): **0 vulnerabilities** at the time of writing.
+
+**Server (`package.json`)**
+
+| Package | Purpose |
+|---|---|
+| express | Local HTTP server and API |
+| better-sqlite3 | SQLite database file |
+| dotenv | Reads `.env` |
+| @anthropic-ai/sdk | Deep Research AI call (server-side only; used from Stage 1.5b) |
+
+**UI (`web/package.json`)**
+
+| Package | Purpose |
+|---|---|
+| react, react-dom | UI library |
+| @base-ui/react | Accessible primitives under the coss ui components |
+| class-variance-authority, clsx, tailwind-merge | Component class composition (used by coss ui) |
+| lucide-react | Icons, bundled locally |
+| @fontsource-variable/inter | Inter variable font, self-hosted |
+| @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities | Drag and drop for the Pipeline board (ReUI Kanban) |
+| @tanstack/react-table | Agencies grid (sorting, rows) |
+| vite, @vitejs/plugin-react | Build and dev server (dev only) |
+| typescript, @types/react, @types/react-dom, @types/node | Type checking (dev only) |
+| tailwindcss, @tailwindcss/vite | Styling (dev only; compiled to static CSS) |
+| vitest, jsdom, @testing-library/react, @testing-library/user-event, @testing-library/jest-dom | UI unit tests (dev only) |
+| axe-core | Accessibility checks in `test:e2e` (dev only) |
+| playwright-core | Drives Chrome for `test:e2e`; downloads no browsers (dev only) |
+
+**Copied-in component code (copy-and-own, not npm packages)**
+
+- **coss ui** components in `web/src/components/ui/` and `web/src/lib/segmented-control.ts`, copied from [cosscom/coss](https://github.com/cosscom/coss) `apps/ui/registry/default` at commit `dd49ec9` (MIT; `apps/ui` is MIT per the repo's LICENSING.md). The documented install is `npx shadcn@latest add @coss/ui`, but coss.com (which hosts that registry) was not reachable from the build environment, so the documented manual method (copy the files) was used. Local edits: import paths; button press scale; ease-in-out → ease-out and durations ≤200ms; no backdrop blur; command palette and quick-log sheet made instant.
+- **ReUI** Kanban and Timeline in `web/src/components/reui/`, added with the shadcn CLI from the free `@reui` registry (Base UI "base-nova" style, MIT). Local edits: `cn` import path, `import.meta.env.DEV` instead of `process.env`, drop animation 180ms ease-out (0 with reduced motion); a `handle` mode so cards can contain links/buttons without nested interactive controls; a column-aware keyboard coordinate getter (dnd-kit's default sent ArrowRight to the card below instead of the next column). ReUI's Data Grid, Filters and Event Calendar were **not** used: each is 300–400KB and pulls in shadcn components (dropdown-menu, checkbox, calendar) that clash with coss ui, so the grid uses `@tanstack/react-table`, filters use coss Select/Toggle Group/Input, and the calendar is a small own component.
 
 ## Backup
 
@@ -197,9 +254,9 @@ For agencies you **add by hand**, the name, website and phone are your own typed
 | `DB_PATH` | ./data/hq-desk.db | Location of your database. |
 
 ## Security notes
-- Only binds to `127.0.0.1`. Requests whose `Host` isn't `127.0.0.1`/`localhost` are refused, which blocks DNS-rebinding attacks.
-- Every write needs the `X-HQ-Desk` header and JSON body, and a cross-origin `Origin` is refused. This is the CSRF protection.
-- A strict Content-Security-Policy allows no external scripts. All page text is inserted as text, never HTML. Links are allowed only if they are `http(s)`.
+- Only binds to `127.0.0.1` (the dev server too). Requests whose `Host` isn't `127.0.0.1`/`localhost` are refused, which blocks DNS-rebinding attacks.
+- CSRF: the UI reads a random per-process token from `GET /api/session` and sends it as `X-CSRF-Token` on every write; writes also need a JSON body, and a cross-origin `Origin` is refused. Other websites can't read the token (no CORS is ever allowed).
+- A strict Content-Security-Policy (`script-src 'self'`, `style-src 'self'`) allows no inline or external scripts; the compiled UI has none (the theme is set before paint by a static `theme-init.js` file). React escapes all text; links are rendered only for `http(s)` URLs. Base UI is wrapped in `CSPProvider disableStyleElements` so it never injects `<style>` tags (its one rule lives in `app.css`); the browser test fails on any CSP violation.
 - Deep Research crawls only public https addresses: DNS is checked and the connection is pinned on every hop, robots.txt is obeyed, and output is checked against a strict schema. The AI key is only in `.env`, never sent to the browser, and redacted from errors.
 - All SQL is parameterized. Every API route rejects unknown fields and validates types, lengths, enums, dates and URLs.
 
@@ -216,10 +273,15 @@ src/google/               Places client (policy rules), rate limit, cache
 src/research/             Deep Research: netguard (SSRF), fetcher, robots, extract,
                           schema (strict validation), llm, cost, runner, diff, accept
 src/routes/               API routes
-public/css/tokens.css     design tokens (colour, spacing, type, motion) for light + dark
-public/js/ui/             toasts, dialogs, palette, shortcuts, quick-log drawer, autosave
-public/js/views/          pages (Today, Agencies, Agency tabs, Search, Add by hand)
-public/fonts/             self-hosted Inter variable font (OFL licence included)
+web/                      React + TypeScript + Tailwind UI (Vite); builds to web/dist
+web/src/styles/tokens.css the one token set: colour (light/dark), stage colours, motion, z-index
+web/src/components/ui/    coss ui components (copied, MIT)
+web/src/components/reui/  ReUI Kanban + Timeline (copied via shadcn CLI, MIT)
+web/src/components/app/   app components: sidebar, palette, quick log, stage badge, task list…
+web/src/pages/            Today, Agencies, Agency (tabs), Pipeline, Follow-ups, Search, Add by hand
+web/src/test/             UI unit tests
+test/e2e/                 fake-Google server for browser checks; scripts/e2e.mjs runs them
+DESIGN_SYSTEM_CHECKLIST.md design system checklist with status for every item
 scripts/                  db:init, db:reset
 test/                     node:test suites
 ```
