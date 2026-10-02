@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+# Local database and backups: these hold your own sales data
+data/*.db
+data/*.db-*
+data/*.sqlite
+backups/
+*.log
+.DS_Store

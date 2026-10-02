@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>HQ Desk</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">HQ Desk <span class="badge-local">local only</span></div>
+    <nav>
+      <div class="nav-group">Sales</div>
+      <a href="#/followups" data-nav="followups">Follow-ups</a>
+      <a href="#/agencies" data-nav="agencies">Agencies</a>
+      <a href="#/search" data-nav="search">Find agencies</a>
+      <a href="#/agencies/new" data-nav="new">Add by hand</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="usage" class="usage" title="Google Places calls made today (server-side limit)">Google calls: …</div>
+      <a href="/api/export/my-data.json" class="muted small" download>Export my notes (JSON)</a>
+    </div>
+  </aside>
+  <main id="view" tabindex="-1"></main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "hq-desk",
+  "version": "0.1.0",
+  "description": "HQ Desk: private, local-only sales and planning workspace",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "db:init": "node scripts/init-db.js",
+    "db:reset": "node scripts/reset-db.js",
+    "test": "node --test test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ctownhill0-sketch/hq.git"
+  },
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/ctownhill0-sketch/hq/issues"
+  },
+  "homepage": "https://github.com/ctownhill0-sketch/hq#readme",
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.5",
+    "express": "^4.22.3"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.17"
+  }
+}
