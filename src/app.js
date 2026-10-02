@@ -7,8 +7,15 @@ const { hostCheck, csrfCheck, securityHeaders } = require('./security');
 const { createPlacesClient } = require('./google/places');
 const { createRateLimiter } = require('./google/rateLimit');
 const { createDetailsCache } = require('./google/cache');
+const { createLlm } = require('./research/llm');
+const { createResearchRunner } = require('./research/runner');
 
-function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.now() }) {
+/**
+ * fetchImpl: used for Google Places. llmFetch: used by the Anthropic SDK.
+ * researchResolve / researchTransport: DNS + HTTPS for the research crawler.
+ * All are injectable so tests never touch the network.
+ */
+function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.now(), llmFetch, researchResolve, researchTransport, researchSleep }) {
   const rateLimiter = createRateLimiter({ db, perMinute: config.rateLimitPerMinute, perDay: config.rateLimitPerDay, now });
   const cache = createDetailsCache(config.detailsCacheSeconds, now);
   const places = createPlacesClient({
@@ -18,6 +25,11 @@ function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.
     fetchImpl,
     rateLimiter,
     cache,
+  });
+
+  const llm = createLlm({ ...config.llm, fetchImpl: llmFetch });
+  const runner = createResearchRunner({
+    db, config, llm, resolve: researchResolve, transport: researchTransport, ...(researchSleep ? { sleep: researchSleep } : {}),
   });
 
   const app = express();
@@ -34,6 +46,8 @@ function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.
   api.use(require('./routes/agencies')({ db }));
   api.use(require('./routes/activity')({ db }));
   api.use(require('./routes/export')({ db }));
+  api.use(require('./routes/research')({ db, runner, config }));
+  api.use(require('./routes/dashboard')({ db }));
   api.use((req, res) => res.status(404).json({ error: 'Not found.' }));
 
   // Errors: known errors return their message; anything else is generic.
@@ -50,6 +64,7 @@ function createApp({ db, config, fetchImpl = globalThis.fetch, now = () => Date.
     res.status(500).json({ error: 'Unexpected server error. Check the terminal for details.' });
   });
   app.use('/api', api);
+  app.locals.runner = runner;
 
   return app;
 }

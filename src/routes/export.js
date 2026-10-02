@@ -15,6 +15,10 @@ module.exports = function exportRoutes({ db }) {
       discovery: db.prepare('SELECT * FROM discovery ORDER BY id').all(),
       tasks: db.prepare('SELECT * FROM tasks ORDER BY id').all(),
       demos: db.prepare('SELECT * FROM demos ORDER BY id').all(),
+      // Research findings come from the agency's own website (never Google).
+      research_runs: db.prepare('SELECT * FROM research_runs ORDER BY id').all(),
+      research_decisions: db.prepare('SELECT * FROM research_decisions ORDER BY id').all(),
+      agency_events: db.prepare('SELECT * FROM agency_events ORDER BY id').all(),
     };
     res.setHeader('Content-Disposition', 'attachment; filename="hq-desk-my-data.json"');
     res.json(data);

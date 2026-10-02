@@ -40,6 +40,9 @@ module.exports = function agencyRoutes({ db }) {
   // Name shown in lists is always your own data: manual name or your label.
   const LIST_SQL = `
     SELECT a.id, a.place_id, a.source, a.label, a.manual_name, a.pipeline_stage, a.handles_apartments, a.updated_at,
+      a.licence_verified, a.decision_maker_name,
+      (SELECT json_extract(r.result_json, '$.fit.score') FROM research_runs r
+        WHERE r.agency_id = a.id AND r.status = 'succeeded' ORDER BY r.id DESC LIMIT 1) AS fit_score,
       (SELECT MIN(t.due_date) FROM tasks t WHERE t.agency_id = a.id AND t.status = 'open' AND t.due_date IS NOT NULL) AS next_follow_up,
       (SELECT MAX(c.contacted_at) FROM calls c WHERE c.agency_id = a.id) AS last_contact
     FROM agencies a
@@ -105,7 +108,11 @@ module.exports = function agencyRoutes({ db }) {
       // Column names come from the fixed spec above, never from user input.
       db.prepare(`UPDATE agencies SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = datetime('now') WHERE id = @id`)
         .run({ ...input, id });
-      res.json({ ok: true });
+      if (input.pipeline_stage && input.pipeline_stage !== current.pipeline_stage) {
+        db.prepare("INSERT INTO agency_events (agency_id, kind, detail) VALUES (?, 'stage', ?)")
+          .run(id, `Stage: ${current.pipeline_stage} → ${input.pipeline_stage}`);
+      }
+      res.json({ ok: true, previous_stage: current.pipeline_stage });
     } catch (e) { next(e); }
   });
 

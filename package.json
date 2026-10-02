@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/ctownhill0-sketch/hq#readme",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
     "better-sqlite3": "^13.0.3",
     "dotenv": "^18.0.5",
     "express": "^4.22.3"

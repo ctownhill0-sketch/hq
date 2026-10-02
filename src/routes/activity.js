@@ -36,6 +36,12 @@ const DEMO = {
   outcome: { type: 'text', max: 2000 },
 };
 
+function localNow() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
 function notFound(what) {
   const e = new Error(`${what} not found.`);
   e.httpStatus = 404;
@@ -110,7 +116,9 @@ module.exports = function activityRoutes({ db }) {
   r.patch('/tasks/:id', (req, res, next) => {
     try {
       const id = parseId(req.params.id);
-      if (!updateRow(db, 'tasks', id, validate(req.body, TASK_PATCH, { partial: true }))) throw notFound('Task');
+      const input = validate(req.body, TASK_PATCH, { partial: true });
+      if (input.status) input.completed_at = input.status === 'done' ? localNow() : null;
+      if (!updateRow(db, 'tasks', id, input)) throw notFound('Task');
       res.json({ ok: true });
     } catch (e) { next(e); }
   });

@@ -3,6 +3,7 @@
 // random local port. No real Google calls are ever made in tests.
 const { openDb } = require('../src/db');
 const { createApp } = require('../src/app');
+const { loadConfig } = require('../src/config');
 
 const FAKE_PLACE = {
   id: 'ChIJ_fakePlaceId_123456',
@@ -30,12 +31,16 @@ function fakeGoogle({ notFound = false } = {}) {
   return { fetchImpl, calls };
 }
 
-async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl) {
+async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl, appOptions = {}) {
   const db = openDb(':memory:');
+  const base = loadConfig({});
   const config = {
+    ...base,
     host: '127.0.0.1', port: 0, dbPath: ':memory:', googleApiKey: 'TEST_KEY_abc123',
     rateLimitPerMinute: 10, rateLimitPerDay: 200, detailsCacheSeconds: 0, languageCode: 'en', regionCode: 'US',
     ...overrides,
+    llm: { ...base.llm, ...(overrides.llm || {}) },
+    research: { ...base.research, requestIntervalMs: 0, ...(overrides.research || {}) },
   };
   // Port is needed for the Host/Origin checks, so listen first then set it.
   const holder = { app: null };
@@ -43,8 +48,8 @@ async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl) {
     const s = require('http').createServer((req, res) => holder.app(req, res)).listen(0, '127.0.0.1', () => resolve(s));
   });
   config.port = server.address().port;
-  holder.app = createApp({ db, config, fetchImpl });
-  const base = `http://127.0.0.1:${config.port}`;
+  holder.app = createApp({ db, config, fetchImpl, ...appOptions });
+  const baseUrl = `http://127.0.0.1:${config.port}`;
 
   async function request(method, path, body, headers = {}) {
     const init = { method, headers: { 'X-HQ-Desk': '1', ...headers } };
@@ -52,13 +57,13 @@ async function startApp(overrides = {}, fetchImpl = fakeGoogle().fetchImpl) {
       init.headers['Content-Type'] = 'application/json';
       init.body = typeof body === 'string' ? body : JSON.stringify(body);
     }
-    const res = await fetch(base + path, init);
+    const res = await fetch(baseUrl + path, init);
     let json = null;
     try { json = await res.json(); } catch { /* empty */ }
     return { status: res.status, body: json };
   }
 
-  return { db, config, base, request, close: () => new Promise((r) => server.close(r)) };
+  return { db, config, base: baseUrl, request, app: holder.app, close: () => new Promise((r) => server.close(r)) };
 }
 
 module.exports = { startApp, fakeGoogle, FAKE_PLACE };
