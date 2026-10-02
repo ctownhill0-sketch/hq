@@ -4,27 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
   <title>HQ Desk</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/css/app.css">
+  <link rel="preload" href="/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+  <script src="/js/theme-init.js"></script>
+  <link rel="stylesheet" href="/css/tokens.css">
+  <link rel="stylesheet" href="/css/base.css">
+  <link rel="stylesheet" href="/css/components.css">
+  <link rel="stylesheet" href="/css/pages.css">
 </head>
 <body>
-  <aside class="sidebar">
-    <div class="brand">HQ Desk <span class="badge-local">local only</span></div>
-    <nav>
-      <div class="nav-group">Sales</div>
-      <a href="#/followups" data-nav="followups">Follow-ups</a>
-      <a href="#/agencies" data-nav="agencies">Agencies</a>
-      <a href="#/search" data-nav="search">Find agencies</a>
-      <a href="#/agencies/new" data-nav="new">Add by hand</a>
-    </nav>
-    <div class="sidebar-foot">
-      <div id="usage" class="usage" title="Google Places calls made today (server-side limit)">Google calls: …</div>
-      <a href="/api/export/my-data.json" class="muted small" download>Export my notes (JSON)</a>
-    </div>
-  </aside>
-  <main id="view" tabindex="-1"></main>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <a class="skip-link" href="#view">Skip to content</a>
+  <div class="shell" id="shell">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="sidebar-top">
+        <a class="brand" href="#/today" aria-label="HQ Desk home">
+          <span class="brand-mark" aria-hidden="true">HQ</span>
+          <span class="brand-text">HQ Desk</span>
+          <span class="brand-badge">local</span>
+        </a>
+        <button type="button" class="btn btn-ghost btn-icon btn-sm collapse-btn" id="collapse-btn" aria-label="Collapse sidebar" data-tip="Collapse  [" data-tip-pos="right"></button>
+      </div>
+      <nav class="nav" id="nav"></nav>
+      <div class="sidebar-foot">
+        <div class="meters" id="meters" aria-label="Today's usage"></div>
+        <div class="sidebar-actions" id="sidebar-actions"></div>
+      </div>
+    </aside>
+    <main class="main" id="view" tabindex="-1"></main>
+  </div>
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
   <script type="module" src="/js/app.js"></script>
 </body>
 </html>

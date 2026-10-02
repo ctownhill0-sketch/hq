@@ -2,7 +2,9 @@
 
 A private, local-only sales and planning workspace for HQ. It runs on your laptop only (`127.0.0.1`), stores your data in one SQLite file, and has no accounts, analytics or hosting. It never contacts anyone for you.
 
-**Stage 1 (current):** agency search (Google Places), saved agencies, agency page with live Google details, qualification, call log with the six discovery questions, tasks, demos, follow-ups, call script, manual "add by hand" agencies, and fake sample agencies.
+**Built so far:**
+- **Stage 1:** agency search (Google Places), saved agencies, agency page with live Google details, qualification, call log with the six discovery questions, tasks, demos, follow-ups, call script, manual "add by hand" agencies, fake sample agencies.
+- **Stage 1.5:** per-agency **Deep Research** (AI fit assessment from the agency's own website, with sources) and a full UI overhaul: Today dashboard, light/dark themes, command palette, keyboard shortcuts, quick-log drawer, autosave, undo.
 
 ---
 
@@ -35,7 +37,13 @@ The server binds to `127.0.0.1` only, so other devices on your Wi-Fi cannot reac
 npm test
 ```
 
-The tests use an in-memory database and a fake Google endpoint. They never call Google or touch your real data. They cover:
+The tests use an in-memory database, a fake Google endpoint, a fake agency website and a fake AI API. They never touch the network or your real data. They cover:
+- research SSRF protections: http, localhost, IP literals, private/link-local/IPv6-mapped addresses, redirects to private IPs or other domains, too many redirects
+- robots.txt parsing and obedience; robots.txt errors stop the run
+- strict schema validation: off-schema, extra or injected fields reject the whole result; invented quotes are dropped
+- daily run and spend caps; actual cost recorded; keys never stored or shown
+- no Google-derived values in `research_runs`; Accept writes only whitelisted fields of your own
+- WCAG AA contrast of the colour tokens in light and dark themes
 - place-ID-only storage (they search, save and view details, then scan every table for Google values)
 - field mask and API key handling
 - stale place IDs and relinking
@@ -44,6 +52,66 @@ The tests use an in-memory database and a fake Google endpoint. They never call 
 - running with no API key
 - input validation
 - CSRF, Origin and Host protections
+
+## Using the app
+
+- **Today** (`g` `t`): overdue and due follow-ups, demos, pipeline snapshot, agencies that still need research, daily limits.
+- **Agencies** (`g` `a`): instant search (`/`), filters (stage, apartments, fit score, follow-up), click column headers to sort, `j`/`k` or arrows to move, `Enter` to open.
+- **Agency page:** stage selector (changing it shows an Undo toast; "Declined" asks for a reason), quick actions (Call, Email, Task), tabs (Overview, Research, Calls, Tasks, Notes) and an activity timeline. Fields **save automatically** as you type, with a "Saved" indicator.
+- **Command palette:** `Cmd/Ctrl+K` to jump to any agency or run "Log a call", "Add task", "New agency", "Search Google".
+- **Quick-log a call** from anywhere with `l`. Save with `Cmd/Ctrl+Enter`. A "next action" becomes a task.
+- **Shortcuts:** press `?` for the full list. `[` collapses the sidebar. The theme button (bottom of the sidebar) cycles system / light / dark.
+- **Deletes** (calls, tasks, demos, agencies) wait 5 seconds with an **Undo** button before anything is removed.
+
+## Deep Research (per agency, on demand)
+
+Deep Research helps you decide quickly whether an agency is a qualified buyer for the $1,500 pilot: a licensed independent agency that regularly handles apartment/habitational insurance, has a visible renewal-document bottleneck, a decision maker and a reviewer.
+
+**To turn it on**, add these to `.env` and restart:
+```
+LLM_API_KEY=your-anthropic-api-key      # from console.anthropic.com, read from .env only
+RESEARCH_CONTACT_EMAIL=you@example.com  # shown in the crawler's User-Agent
+```
+Without them, the Research tab explains what's missing and everything else works.
+
+**How a run works:**
+1. Open an agency, go to **Research**, and **confirm the website URL**. It's prefilled from your last confirmed URL, the website you typed, or the live Google details on screen. The URL you confirm is what's used and stored, as your own data. One agency per run, one run at a time, never queued.
+2. HQ Desk reads robots.txt, then fetches the homepage plus up to 7 linked pages on the same domain that look relevant (services, apartments/habitational, about, team, carriers, technology, contact, news). Login, cart and payment pages are skipped, as are PDFs and other non-HTML files.
+3. The text (scripts, styles and navigation removed) goes to the AI model with strict rules: page text is untrusted data, any instructions inside it are ignored, the output must match a fixed JSON schema, and the model has no tools.
+4. The result is validated again on the server. Anything off-schema is rejected. Any finding whose quote can't be found on the cited page is dropped and listed as "dropped by verification".
+5. You see a fit score (0-100) with a rubric breakdown, findings with source links, call prep (5 tailored questions plus 2-3 personalisation lines, never sent anywhere), and what changed since the last run. Old runs are kept.
+6. Each finding has **Accept into my notes** (copies it into your qualification fields or notes, tagged "[AI research …, verify]"), **Dismiss** and **Wrong**. Your decisions are stored. **Nothing is applied automatically.**
+
+**Rules it follows (plain language):**
+- Only https sites on public internet addresses. Local network, loopback and other private addresses are blocked, and this is re-checked after every redirect. Each connection is pinned to the address that was checked.
+- It stays on the confirmed site's domain, follows at most 5 redirects, waits 10 seconds at most per page, reads at most 1.5 MB per page and 8 pages per run, and goes 1 request per second.
+- It obeys robots.txt. If robots.txt can't be read because of a server error, it doesn't crawl at all.
+- It never visits Google Search, social networks, review sites, directories or anything behind a login. It doesn't bulk-research or queue agencies.
+- About people, it only records names and titles the business itself publishes.
+- No Google data (names, addresses, phones, ratings, reviews) is sent to the model or stored with research.
+- Keys and full page text are never logged.
+- **AI findings can be wrong. Check the source before you rely on anything.**
+
+**Licence check:** the **Verify licence** button opens the Pennsylvania Insurance Department lookup (set `PA_LICENCE_LOOKUP_URL` in `.env` to its current producer lookup page). Look the agency up yourself, then tick "I verified this agency's licence". The app doesn't automate the lookup.
+
+### Research cost controls
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `LLM_MODEL` | claude-opus-5-5 | Model used. `claude-sonnet-5-5` costs about half as much; `claude-haiku-4-5` is cheaper still. |
+| `LLM_EFFORT` | medium | low / medium / high. Higher means more thorough and more output tokens. |
+| `RESEARCH_MAX_PAGES` | 8 | Pages per run (8 is the hard maximum). |
+| `RESEARCH_MAX_INPUT_TOKENS` | 30000 | Page text is trimmed to fit this. |
+| `RESEARCH_MAX_OUTPUT_TOKENS` | 16000 | Cap on the model's answer, including its reasoning. |
+| `RESEARCH_RUNS_PER_DAY` | 10 | Runs started per local day. |
+| `RESEARCH_DAILY_SPEND_CAP_USD` | 3.00 | A run is refused if today's spend plus this run's **worst case** would exceed the cap. |
+
+- Before a run, the UI shows the worst-case cost (all input tokens plus the full output cap, at the model's price). With the defaults on claude-opus-5-5 ($4 / $20 per million tokens), that's about **$0.45**.
+- After a run, it shows the actual cost from the token counts the API reports. Runs, spend and caps appear in the sidebar meters.
+- If a run is cancelled or fails after the AI call has started and the real cost is unknown, the worst case counts toward the daily cap.
+- Prices are in `src/research/cost.js`. Check them against Anthropic's pricing page, or override them with `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK`.
+- Also set a spend limit on your Anthropic account (Console → Billing → Limits). The app's caps protect you within the app; the account limit protects the key.
+- `LLM_REFUSAL_FALLBACK=true` turns on Anthropic's server-side fallback: if the model declines, a fallback model may answer instead, and that's billed at the fallback model's price.
 
 ## Backup
 
@@ -132,6 +200,7 @@ For agencies you **add by hand**, the name, website and phone are your own typed
 - Only binds to `127.0.0.1`. Requests whose `Host` isn't `127.0.0.1`/`localhost` are refused, which blocks DNS-rebinding attacks.
 - Every write needs the `X-HQ-Desk` header and JSON body, and a cross-origin `Origin` is refused. This is the CSRF protection.
 - A strict Content-Security-Policy allows no external scripts. All page text is inserted as text, never HTML. Links are allowed only if they are `http(s)`.
+- Deep Research crawls only public https addresses: DNS is checked and the connection is pinned on every hop, robots.txt is obeyed, and output is checked against a strict schema. The AI key is only in `.env`, never sent to the browser, and redacted from errors.
 - All SQL is parameterized. Every API route rejects unknown fields and validates types, lengths, enums, dates and URLs.
 
 ## Project layout
@@ -144,8 +213,13 @@ src/security.js           host/CSRF checks, security headers
 src/validate.js           input validation
 src/db/                   SQLite open + migrations + fake sample seed
 src/google/               Places client (policy rules), rate limit, cache
+src/research/             Deep Research: netguard (SSRF), fetcher, robots, extract,
+                          schema (strict validation), llm, cost, runner, diff, accept
 src/routes/               API routes
-public/                   HTML/CSS/vanilla JS (no build step)
+public/css/tokens.css     design tokens (colour, spacing, type, motion) for light + dark
+public/js/ui/             toasts, dialogs, palette, shortcuts, quick-log drawer, autosave
+public/js/views/          pages (Today, Agencies, Agency tabs, Search, Add by hand)
+public/fonts/             self-hosted Inter variable font (OFL licence included)
 scripts/                  db:init, db:reset
 test/                     node:test suites
 ```

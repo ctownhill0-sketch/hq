@@ -17,6 +17,10 @@ const server = app.listen(config.port, config.host, () => {
   console.log(config.googleApiKey
     ? `Google Places: enabled (limits ${config.rateLimitPerMinute}/min, ${config.rateLimitPerDay}/day)`
     : 'Google Places: disabled (no GOOGLE_PLACES_API_KEY in .env)');
+  const r = app.locals.runner.usage();
+  console.log(r.enabled
+    ? `Deep Research: enabled (${r.model}, ${config.research.runsPerDay} runs/day, $${config.research.dailySpendCapUsd.toFixed(2)}/day cap)`
+    : `Deep Research: disabled (${r.reason})`);
 });
 
 server.on('error', (err) => {

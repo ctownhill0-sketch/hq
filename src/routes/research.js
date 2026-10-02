@@ -113,7 +113,7 @@ module.exports = function researchRoutes({ db, runner, config }) {
               .run({ ...applied, id: run.agency_id });
           }
           db.prepare("INSERT INTO agency_events (agency_id, kind, detail) VALUES (?, 'accept', ?)")
-            .run(run.agency_id, `Accepted research finding into ${keys.join(', ') || 'notes'}`);
+            .run(run.agency_id, `Accepted research finding into ${keys.map((k) => k.replace(/_/g, ' ')).join(', ') || 'notes'}`);
         }
         db.prepare(`INSERT INTO research_decisions (run_id, finding_key, decision, applied_fields) VALUES (?, ?, ?, ?)
           ON CONFLICT(run_id, finding_key) DO UPDATE SET decision = excluded.decision, applied_fields = excluded.applied_fields, decided_at = datetime('now','localtime')`)

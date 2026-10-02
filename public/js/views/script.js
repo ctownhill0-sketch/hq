@@ -1,5 +1,6 @@
 // Collapsible call script: outreach message + the six discovery questions.
-import { h, toast } from '../dom.js';
+import { h, copyText, btn } from '../dom.js';
+import { icon } from '../icons.js';
 
 export const OUTREACH = 'Hi [Name] - I am building HQ\'s internal renewal workflow for agencies that handle apartment insurance. '
   + 'I am building it to organise source documents, flag missing information and keep drafts in a review queue for your licensed team. '
@@ -16,16 +17,20 @@ export const DISCOVERY_QUESTIONS = [
   ['purchase_authority', '6. Purchase', 'If a $1,500 pilot solved this, who would decide, and how would the purchase happen?'],
 ];
 
+function chevron() {
+  const i = icon('chevronRight', { size: 14 });
+  i.classList.add('chev');
+  return i;
+}
+
 export function scriptPanel(name) {
-  const text = name ? OUTREACH.replace('[Name]', name) : OUTREACH;
-  return h('details', { class: 'card script-panel' },
-    h('summary', {}, 'Call script: outreach message and discovery questions'),
-    h('h3', {}, 'Outreach message'),
-    h('p', { class: 'script-text' }, text),
-    h('button', { class: 'btn btn-small', type: 'button', onclick: async () => {
-      try { await navigator.clipboard.writeText(text); toast('Copied.'); } catch { toast('Copy failed: select the text and copy by hand.', 'error'); }
-    } }, 'Copy message'),
-    h('h3', {}, 'Six discovery questions'),
-    h('ol', { class: 'questions' }, DISCOVERY_QUESTIONS.map(([, label, q]) => h('li', {}, h('strong', {}, label.replace(/^\d\. /, '') + ': '), q))),
-    h('p', { class: 'hint' }, 'Reminder: you are learning about their process. No coverage advice, and never ask them to send client files.'));
+  const text = name ? OUTREACH.replace('[Name]', name.split(' ')[0]) : OUTREACH;
+  return h('details', { class: 'card disclosure' },
+    h('summary', { class: 'card-pad' }, chevron(), icon('message'), 'Call script', h('span', { class: 'xs subtle' }, 'outreach message + six discovery questions')),
+    h('div', { class: 'card-body stack', vars: { 'padding-top': '0' } },
+      h('div', { class: 'row' }, h('h3', {}, 'Outreach message'), h('span', { class: 'spacer' }), btn('Copy', { size: 'sm', iconName: 'copy', onClick: () => copyText(text) })),
+      h('p', { class: 'script-text' }, text),
+      h('h3', {}, 'Six discovery questions'),
+      h('ol', { class: 'questions' }, DISCOVERY_QUESTIONS.map(([, label, q]) => h('li', {}, h('strong', {}, `${label.replace(/^\d\. /, '')}: `), q))),
+      h('p', { class: 'xs subtle' }, 'You are learning about their process: no coverage advice, and never ask them to send client files. Nothing here is sent automatically.')));
 }

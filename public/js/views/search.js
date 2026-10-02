@@ -3,104 +3,97 @@
 // GOOGLE RULE 3: there is deliberately no export/download of results here.
 // GOOGLE RULE 4: attribution is shown above and below the results list.
 import { api } from '../api.js';
-import { h, clear, errorBox, notice, extLink, field, toast, googleAttribution } from '../dom.js';
+import { h, btn, field, emptyState, extLink, hostOf, googleAttribution, callout } from '../dom.js';
+import { icon } from '../icons.js';
+import { toast } from '../ui/toast.js';
+import { notifyChange } from '../store.js';
 
 export async function render(root, { query }) {
   const relinkId = /^\d+$/.test(query.get('relink') || '') ? query.get('relink') : null;
-  root.append(h('h1', {}, relinkId ? 'Relink agency to a current listing' : 'Find agencies'));
-
   const status = await api('/status');
+
+  root.append(h('div', { class: 'page-head' },
+    h('div', {}, h('h1', {}, relinkId ? 'Relink to a current listing' : 'Find agencies'),
+      h('p', { class: 'lede' }, 'Search Google Places for agencies that handle apartment insurance. Saving stores the place ID only.'))));
+
   if (!status.googleEnabled) {
-    root.append(
-      notice('Google search is off because no API key is set.', 'warn'),
-      h('ol', { class: 'steps' },
-        h('li', {}, 'Create a key restricted to "Places API (New)" (README → "Google Cloud setup").'),
+    root.append(h('div', { class: 'card' }, h('div', { class: 'card-body stack' },
+      callout('info', 'alert', h('strong', {}, 'Google search is off because no API key is set.')),
+      h('ol', { class: 'questions' },
+        h('li', {}, 'Create a key restricted to "Places API (New)" (README, "Google Cloud setup").'),
         h('li', {}, 'Copy .env.example to .env in the project folder.'),
-        h('li', {}, 'Paste the key after GOOGLE_PLACES_API_KEY= in .env (never into chat or the browser).'),
+        h('li', {}, 'Paste the key after GOOGLE_PLACES_API_KEY= in .env. Never paste it into chat or the browser.'),
         h('li', {}, 'Restart the server (Ctrl+C, then npm start).')),
-      h('p', {}, 'You can still ', h('a', { href: '#/agencies/new' }, 'add agencies by hand'),
-        ' and try the fake sample agencies on the ', h('a', { href: '#/agencies' }, 'Agencies'), ' page.'));
+      h('div', { class: 'row' }, h('a', { class: 'btn btn-primary', href: '#/agencies/new' }, icon('plus'), 'Add an agency by hand'), h('a', { class: 'btn', href: '#/agencies' }, 'Try the fake sample agencies')))));
     return;
   }
 
-  if (relinkId) {
-    root.append(notice(`The saved Google listing for agency #${relinkId} is no longer available. Search for it again and choose "Use this listing". Your notes and calls stay attached.`, 'warn'));
-  }
+  if (relinkId) root.append(callout('warn', 'alert', `The saved Google listing for agency #${relinkId} is no longer available. Search again and choose "Use this listing". Your notes and calls stay attached.`));
 
-  const results = h('div', { class: 'results' });
-  const cityInput = h('input', { name: 'city', required: true, maxlength: 100, placeholder: 'e.g. Philadelphia, PA', value: sessionStorage.getItem('hq.city') || '' });
-  const queryInput = h('input', { name: 'query', required: true, maxlength: 150, placeholder: 'e.g. apartment insurance agency', value: sessionStorage.getItem('hq.query') || 'insurance agency apartment' });
-  const button = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Search');
-
-  const form = h('form', { class: 'row-form', onsubmit: async (e) => {
+  const city = h('input', { name: 'city', required: true, maxlength: 100, placeholder: 'e.g. Philadelphia, PA', value: sessionStorage.getItem('hq.city') || '', autocomplete: 'off' });
+  const q = h('input', { name: 'query', required: true, maxlength: 150, placeholder: 'e.g. apartment insurance agency', value: sessionStorage.getItem('hq.query') || 'insurance agency apartment', 'data-search': '' });
+  const go = h('button', { type: 'submit', class: 'btn btn-primary btn-lg' }, icon('search'), 'Search');
+  const results = h('div', { class: 'stack', 'aria-live': 'polite' });
+  const form = h('form', { class: 'card card-pad row-end' }, field('City', city), field('What to search', q), go);
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const city = cityInput.value.trim();
-    const q = queryInput.value.trim();
-    if (!city || !q) return;
-    sessionStorage.setItem('hq.city', city);
-    sessionStorage.setItem('hq.query', q);
-    button.disabled = true;
-    clear(results).append(h('p', { class: 'muted' }, 'Searching Google Places…'));
+    if (!city.value.trim() || !q.value.trim()) return;
+    sessionStorage.setItem('hq.city', city.value.trim());
+    sessionStorage.setItem('hq.query', q.value.trim());
+    go.disabled = true;
+    results.replaceChildren(h('div', { class: 'card' }, [1, 2, 3].map(() => h('div', { class: 'finding' }, h('span', { class: 'skeleton skeleton-line', vars: { width: '40%' } }), h('span', { class: 'skeleton skeleton-line', vars: { width: '70%' } })))));
     try {
-      const data = await api('/places/search', { method: 'POST', body: { city, query: q } });
+      const data = await api('/places/search', { method: 'POST', body: { city: city.value.trim(), query: q.value.trim() } });
       showResults(results, data.results, relinkId);
     } catch (err) {
-      clear(results).append(errorBox(err.message));
-    } finally {
-      button.disabled = false;
-    }
-  } },
-  field('City', cityInput), field('What to search', queryInput), button);
+      results.replaceChildren(h('div', { class: 'callout callout-danger', role: 'alert' }, icon('alert'), h('div', {}, err.message)));
+    } finally { go.disabled = false; }
+  });
 
-  root.append(form,
-    h('p', { class: 'hint' }, 'Each search uses 1 Google call. Results are shown only; saving stores the place ID, not the details.'),
-    results);
+  root.append(form, h('p', { class: 'xs subtle', vars: { margin: '8px 0 20px' } }, 'Each search uses 1 Google call (counted in the sidebar). Results are shown, not stored.'), results);
+  if (!city.value) city.focus();
 }
 
 function showResults(container, places, relinkId) {
-  clear(container);
   if (!places.length) {
-    container.append(notice('No results. Try a different city or wording.'), googleAttribution());
+    container.replaceChildren(h('div', { class: 'card' }, emptyState({ iconName: 'search', title: 'No results', text: 'Try a nearby city or different wording, e.g. "commercial property insurance".' })), googleAttribution());
     return;
   }
-  const allAttr = places.flatMap((p) => p.attributions);
-  container.append(googleAttribution(allAttr));
-  const list = h('ul', { class: 'result-list' });
+  const attr = places.flatMap((p) => p.attributions);
+  const card = h('section', { class: 'card', 'aria-label': 'Google results' },
+    h('div', { class: 'card-head' }, h('span', { class: 'card-eyebrow' }, `${places.length} results from Google`), googleAttribution(attr)));
   for (const p of places) {
-    const btn = h('button', { class: 'btn btn-small', type: 'button' }, relinkId ? 'Use this listing' : 'Save');
-    btn.addEventListener('click', async () => {
-      btn.disabled = true;
+    const action = h('button', { type: 'button', class: `btn btn-sm ${relinkId ? 'btn-primary' : ''}` }, icon(relinkId ? 'link' : 'plus', { size: 14 }), relinkId ? 'Use this listing' : 'Save');
+    action.addEventListener('click', async () => {
+      action.disabled = true;
       try {
         if (relinkId) {
           await api(`/agencies/${relinkId}/place`, { method: 'PUT', body: { place_id: p.id } });
-          toast('Agency relinked.');
+          toast('Agency relinked');
           location.hash = `#/agency/${relinkId}`;
         } else {
           const r = await api('/agencies', { method: 'POST', body: { place_id: p.id } }); // place ID only
-          btn.textContent = 'Saved';
-          toast('Saved (place ID only).');
-          btn.after(' ', h('a', { href: `#/agency/${r.id}`, class: 'small' }, 'Open'));
+          action.replaceWith(h('a', { class: 'btn btn-sm', href: `#/agency/${r.id}` }, icon('check', { size: 14 }), 'Saved · open'));
+          toast('Saved (place ID only)');
+          notifyChange({ kind: 'save' });
         }
       } catch (err) {
-        if (err.status === 409 && err.data && err.data.id) {
-          btn.textContent = 'Already saved';
-          btn.after(' ', h('a', { href: `#/agency/${err.data.id}`, class: 'small' }, 'Open'));
-        } else {
-          btn.disabled = false;
-          toast(err.message, 'error');
-        }
+        if (err.status === 409 && err.data && err.data.id) action.replaceWith(h('a', { class: 'btn btn-sm', href: `#/agency/${err.data.id}` }, 'Already saved · open'));
+        else { action.disabled = false; toast(err.message, { kind: 'error' }); }
       }
     });
-    list.append(h('li', { class: 'result' },
-      h('div', { class: 'result-main' },
-        h('div', { class: 'result-name' }, p.name || '(no name)'),
-        p.businessStatus && p.businessStatus !== 'OPERATIONAL' ? h('span', { class: 'tag tag-warn' }, p.businessStatus) : null,
-        h('div', { class: 'muted' }, p.address || ''),
-        h('div', { class: 'links' },
-          p.website ? extLink(p.website, 'Website') : h('span', { class: 'muted' }, 'No website'),
-          ' · ', p.mapsUrl ? extLink(p.mapsUrl, 'View on Google Maps') : null,
-          p.phone ? [' · ', p.phone] : null)),
-      h('div', { class: 'result-actions' }, btn)));
+    card.append(h('div', { class: 'finding' },
+      h('div', { class: 'row' },
+        h('div', { class: 'li-main' },
+          h('span', { class: 'finding-label' }, p.name || '(no name)',
+            p.businessStatus && p.businessStatus !== 'OPERATIONAL' ? h('span', { class: 'badge badge-warning', vars: { 'margin-left': '8px' } }, p.businessStatus.replace(/_/g, ' ').toLowerCase()) : null),
+          h('span', { class: 'small muted' }, p.address || '')),
+        action),
+      h('div', { class: 'row small' },
+        p.website ? extLink(p.website, hostOf(p.website)) : h('span', { class: 'subtle' }, 'No website'),
+        p.mapsUrl ? [h('span', { class: 'subtle' }, '·'), extLink(p.mapsUrl, 'View on Google Maps')] : null,
+        p.phone ? [h('span', { class: 'subtle' }, '·'), h('span', { class: 'num muted' }, p.phone)] : null)));
   }
-  container.append(list, googleAttribution(allAttr));
+  card.append(h('div', { class: 'card-foot' }, googleAttribution(attr)));
+  container.replaceChildren(card);
 }
